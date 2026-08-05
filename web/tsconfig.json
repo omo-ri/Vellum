@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "types": [],
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    // 生成的 schema.d.ts 里可选字段是真的可能不存在，索引访问也是真的可能越界。
+    // 这两项让类型系统承认这一点，而不是让它在读到 undefined 时才崩。
+    "noUncheckedIndexedAccess": true,
+
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+
+    // Vite 负责产出 JS；tsc 在这里只做类型检查这一件事（make lint 的 TS 那一半）。
+    "noEmit": true
+  },
+  "include": ["src", "vite.config.ts"]
+}

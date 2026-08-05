@@ -1,32 +1,85 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+# Vellum 的忽略清单。
 #
-# Binaries for programs and plugins
+# 分组即理由：每一段开头写清「这一类为什么不进版本库」，避免日后往里塞
+# 一条谁也不敢删的规则。
+#
+# 刻意**不**忽略的东西，都是有理由留在库里的：
+#   internal/api/*.gen.go、web/src/api/schema.d.ts —— 契约的生成产物，CI 靠
+#     `make gen-check` 重新生成并比对，不提交就无从比对（见 docs/conventions.md）。
+#   web/pnpm-lock.yaml —— 锁定前端依赖。
+#   .agents/skills/ 与 skills-lock.json —— 随仓库钉死的 agent 技能。
+#   .scratch/ —— 本仓库的 issue tracker（见 docs/agents/issue-tracker.md）。
+
+# --- Go 构建与测试产物 ---
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
 
-# Test binary, built with `go test -c`
+# `go test -c` 产出的测试二进制
 *.test
 
-# Code coverage profiles and other test artifacts
+# 覆盖率与 profile
 *.out
 coverage.*
 *.coverprofile
 profile.cov
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# Go workspace file
+# Go workspace：多模块本地实验用，属于个人环境
 go.work
 go.work.sum
 
-# env file
-.env
+# `make build` 的输出。前导 / 只匹配仓库根，不会误伤将来某个叫 vellum 的目录。
+/vellum
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# --- 前端 ---
+node_modules/
+
+# Vite 的构建产物。将来会由 embed.FS 编进二进制，因此它是构建的输入而非源码——
+# 由 CI 在构建镜像时现场生成，不进版本库。
+web/dist/
+
+# Vite 的依赖预打包缓存与 tsc 的增量信息
+web/node_modules/.vite/
+*.tsbuildinfo
+
+# pnpm store 按 web/.npmrc 指向 /mnt/z/.pnpm-store（仓库之外），这条只防它被
+# 默认配置放回仓库内。
+.pnpm-store/
+
+# 前端包管理器只有 pnpm 一个（web/package.json 的 packageManager 钉死版本）。
+# npm 或 yarn 的 lockfile 出现在这里一律是误操作——忽略掉，免得第二份锁文件
+# 被顺手提交进来、从此两份依赖树各说各话。
+package-lock.json
+yarn.lock
+
+# --- 测试产物 ---
+# Playwright 冒烟测试（M0）
+test-results/
+playwright-report/
+playwright/.cache/
+
+# --- 配置与密钥 ---
+# .env 是本地配置的唯一来源，逐机器不同且含口令。.env.example 是它的模板，必须进库。
+.env
+.env.*
+!.env.example
+
+# --- 运行时数据 ---
+# 照片原图与派生图的落盘位置。生产上是 VM 的数据卷，本地是这个目录。
+/data/
+
+# --- 编辑器与操作系统 ---
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# --- Agent 本地配置 ---
+# .claude/settings.local.json 是本机的权限白名单，逐机器不同。
+# .claude/skills/ 是指向 .agents/skills/ 的符号链接，由 skills 安装流程生成。
+.claude/settings.local.json
+.claude/skills/

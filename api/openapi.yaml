@@ -1,0 +1,79 @@
+openapi: 3.0.3
+
+info:
+  title: Vellum API
+  description: |
+    单用户个人据点站的 HTTP 契约。这份文件是前后端之间的唯一真相：
+    Go 端的服务接口与 TS 端的类型都由它生成，生成产物提交进版本库，
+    CI 重新生成并比对，不一致即失败。
+  version: 0.1.0
+
+servers:
+  # 所有业务路径都挂在 /api 之下；非 /api 前缀的路径将来一律交给内嵌的 SPA。
+  # Go 端由 RegisterHandlersWithBaseURL(e, si, "/api") 落实这一前缀，
+  # 因此下面的 paths 只写 /api 之后的部分。
+  - url: /api
+
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: 健康检查
+      description: |
+        免鉴权。用于部署后确认服务活着，以及确认它真的连得上数据库。
+
+        它会实际查询一次数据库而不只是回一个常量——否则「服务活着但数据库连不上」
+        或「迁移没跑」这类情况会被它瞒过去。
+      security: []
+      responses:
+        "200":
+          description: 服务与数据库都正常
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          description: 服务活着，但数据库不可用
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+components:
+  schemas:
+    Health:
+      type: object
+      description: |
+        只报状态，不报细节。这个端点公开可访问，因此它不返回行数、版本号、
+        错误原文一类会向陌生人泄露内部情况的东西。
+      required:
+        - status
+        - database
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          description: 整体状态。任何一个依赖不正常即为 degraded。
+        database:
+          type: string
+          enum: [ok, error]
+          description: 数据库是否可查询。
+      example:
+        status: ok
+        database: ok
+
+    Error:
+      type: object
+      description: 全站统一的错误响应体，由 platform/httpx 的 HTTPErrorHandler 产出。
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: 面向站主的错误说明。不包含堆栈、SQL 或内部路径。
+        request_id:
+          type: string
+          description: 本次请求的 ID，与访问日志里的同一个值，便于对照排查。
+      example:
+        message: 资源不存在
+        request_id: 4Xq2mJ9nS1kP

@@ -1,0 +1,11 @@
+# oapi-codegen：生成 Echo 的服务端接口与路由注册函数。
+#
+# 生成的 ServerInterface 由各模块的 handler 实现——端点有没有漏实现，
+# 由编译器来回答，而不是靠人对着契约数。
+#
+# 不生成 models：类型在同一个包的 types.gen.go 里，由 cfg-types.yaml 负责。
+package: api
+output: internal/api/server.gen.go
+
+generate:
+  echo-server: true

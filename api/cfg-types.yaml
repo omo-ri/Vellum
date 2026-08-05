@@ -1,0 +1,18 @@
+# oapi-codegen：只生成 components/schemas 对应的 Go 类型。
+#
+# 与 cfg-server.yaml 拆成两份、输出到同一个包的两个文件，是为了让「契约里的数据形状」
+# 与「路由与接口」在 diff 里各归各的——改一个 schema 不会让路由表跟着翻动。
+#
+# 刻意不生成 embedded-spec：它唯一的用途是喂给 OpenAPI 请求校验中间件，而现在还没挂
+# 校验器。生成它只会得到一个没人 import 的死文件。等接入校验中间件那一批再加一行。
+package: api
+output: internal/api/types.gen.go
+
+generate:
+  models: true
+
+output-options:
+  # 关掉剪枝。默认行为是丢掉没被任何 path 引用到的 schema，而 Error 正是这样一个
+  # schema——它由 platform/httpx 的统一错误处理器产出，不挂在任何一个 operation 的
+  # responses 下。丢了它，错误响应的形状就只存在于契约的文字里，没人替我们对齐。
+  skip-prune: true
