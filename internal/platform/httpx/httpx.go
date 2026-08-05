@@ -2,7 +2,8 @@
 //
 // 刻意只挂三个中间件——RequestID、访问日志、Recover。没有 CORS（前后端同源）、
 // 没有 Gzip（Cloudflare 在前面）、没有 CSRF（前提是 GET 无副作用，见
-// docs/conventions.md）。BodyLimit、Secure 头、IPExtractor 等留到需要它们的那一批。
+// docs/architecture.md 的「纪律」）。BodyLimit、Secure 头、IPExtractor 等留到需要
+// 它们的那一批。
 package httpx
 
 import (

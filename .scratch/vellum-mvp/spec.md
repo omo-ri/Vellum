@@ -1,6 +1,22 @@
 # Spec: Vellum —— 个人据点站（M0–M4）
 
-Status: ready-for-agent
+Status: archived
+
+> **⚠️ 本文件已存档，不再更新。**
+>
+> 它是 Vellum 全部文档的来源，但它把产品与工程混在一起写，同一条决策在它和 `docs/` 之间有多份副本。内容已按「一份文档回答一个问题」拆分完毕：
+>
+> | 本文的这部分 | 现在归 |
+> | --- | --- |
+> | Problem Statement / Solution / User Stories 1–70 / 关键业务规则 / 产品侧 Out of Scope / 里程碑 | [`PRD.md`](../../PRD.md) |
+> | User Stories 71–83（面向开发者的那些） | `docs/` 下对应的各份 |
+> | 模块边界 / 三层结构 / 类型流向 / 注入点 | [`docs/architecture.md`](../../docs/architecture.md) |
+> | 四个 schema 的表与约束 | [`docs/data-model.md`](../../docs/data-model.md) |
+> | Testing Decisions | [`docs/testing.md`](../../docs/testing.md) |
+> | 本地开发 / 部署与 CI/CD | [`docs/operations.md`](../../docs/operations.md) |
+> | 技术选型理由 / 工程侧 Out of Scope | [`docs/decisions.md`](../../docs/decisions.md) |
+>
+> **需要改动其中任何一条时，改新文档，不要改这里。** 保留本文是因为它记录了大量「否决过什么以及为什么」的推理过程，那是最贵的信息。
 
 ## Problem Statement
 

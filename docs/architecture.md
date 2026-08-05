@@ -1,179 +1,202 @@
 # 架构
 
-这份文档回答的是**「某段代码该写在哪个包、为什么边界画在这里」**。它描述结构，不描述功能——要做什么看 [`.scratch/vellum-mvp/spec.md`](../.scratch/vellum-mvp/spec.md)，术语怎么叫看 [`UBIQUITOUS_LANGUAGE.md`](../UBIQUITOUS_LANGUAGE.md)，跨文件的纪律看 [`conventions.md`](conventions.md)。
+这份文档回答的是**「代码该写在哪、有哪些不能违反的约定、以及为什么」**。
 
-标注 **（未落地）** 的部分是已经定案、但骨架阶段还没有代码的结构。写在这里是为了让第一个业务模块进来时不必重新决定一遍。
+它描述结构，不描述功能——要做什么看 [`PRD.md`](../PRD.md)，术语怎么叫看 [`UBIQUITOUS_LANGUAGE.md`](../UBIQUITOUS_LANGUAGE.md)，库里有哪些表看 [`data-model.md`](data-model.md)。
 
-## 总体形态
+一条规则要写进这份文档，必须同时满足两个条件：**我理解并认同它为什么这么做**，且 **AI 照着能稳定执行**。写不出「不遵守会出什么具体的错」的条目不写；只靠「将来可能需要」支撑的条目也不写——那个理由没有下界，它能同时论证第四层、事件总线和一切抽象。
 
-一个 Go 单体进程 + 一个 Postgres 实例。生产上由 docker compose 编排在一台海外 VM 上，前置 Cloudflare。前端构建产物将来通过 `embed.FS` 编进同一个二进制，因此**部署产物只有一个可执行文件**——它同时提供 SPA 与 `/api`。
+**只在某一行代码旁边才有意义的知识**（某个工具的坑、某个 API 的陷阱）写在那行代码的注释里，不写在这里。
 
-本地开发不走这条路：docker 只跑 Postgres，Go 与 Vite 直接跑在宿主机上，以获得完整的热重载速度。两种环境唯一共享的配置通路是**进程环境变量**（见 conventions 的「配置无默认值」）。
+标注 **（未落地）** 的是已经定案、但还没有代码的部分。
 
-## 依赖方向
+## 五条理念
+
+这一节是这份文档里唯一可以整个搬到下一个 Go 项目的东西。每条一行——一条你背不出来的理念，下个项目开工时不会想起它。
+
+**一｜失败尽量前移。** 能在启动时暴露的错误不要留到第一个请求，能在编译时暴露的不要留到运行时。
+
+> 配置无默认值，缺一即启动失败 · `db.Open` 之后立刻 `Ping`（`pgxpool.New` 是惰性的，不 Ping 的话拼错的 DSN 要到第一次查询才暴露）· `var _ ServerInterface = (*Handler)(nil)` 编译期断言 · CI 的 `make gen-check`。
+
+**二｜每件事只有一个发生地。** 判断方法：「这件事我改一次，需要动几个地方？」答案必须是 1。
+
+> 依赖装配只在 `cmd/vellum` · SQL 只在 repo · 错误响应的形状只由 `httpx.errorHandler` 决定 · `time.Now()` 只在时钟实现里 · DSN 只由 `config.Config.DSN()` 拼 · API 客户端只由 `web/src/api/client.ts` 构造 · 两端类型只从 `api/openapi.yaml` 生成 · 颜色间距字号只从设计令牌来 · 存款余额只是流水求和，不另存字段。
+
+**三｜观测在外，改变在内。** 中间件是一层层包住 handler 的洋葱，先 `Use` 的在最外层。只看不改的放外层，因为它们要看见内层所有人的最终结果；会改变或终止流程的放内层。
+
+> `RequestID → 访问日志 → Recover → handler`。反过来的话 panic 会直接穿过日志中间件，最需要日志的那次请求恰好没有日志行。将来加鉴权中间件也放日志内层，这样 401 才有日志。
+
+**四｜特殊情况汇入主路径，不自己开岔路。** 能把特殊情况转成普通情况的就转——岔路会随时间长出自己的规矩，两条路慢慢就不一致了。
+
+> Recover 配 `DisableErrorHandler`，让 panic 变成普通 error 继续上传，与其他任何 500 走完全同一条路 · 固定开销在计算上与弹性开销完全一样，唯一区别是记得早，因此不需要「冲抵」概念也不需要周期性模板机制。
+
+**五｜抽象只为「测不了」和「说不清」而引入。** 只有两个正当理由：不加就没法测（时钟、repo 接口），或者不加就说不清「这段代码写在哪」（三层）。**「将来可能要换实现」不是理由。**
+
+> 反向实例：不引入 DI 框架、mock 生成框架、第四层——它们都不缺这两个理由中的任何一个。
+
+## 结构
+
+### 依赖方向
 
 ```
-                    cmd/vellum  ← 唯一的装配处
-                         │
-        ┌────────────────┼────────────────┐
-        ▼                ▼                ▼
-   internal/api    internal/platform   migrations
-   （契约产物）      config db httpx log   （内嵌 SQL）
-        ▲
-        │  （未落地）三个业务模块，各自内部三层
-        └── internal/finance ─┐
-            internal/recipe  ─┼─ handler → service → repo
-            internal/album   ─┘
+                cmd/vellum ← 唯一的装配处
+                     │
+    ┌────────────────┼──────────────┬─────────────────┐
+    ▼                ▼              ▼                 ▼
+internal/api  internal/platform  migrations       业务模块
+（契约产物）   config db httpx log （内嵌 SQL）  auth · finance · recipe · album
+                                              （未落地：后三个内部三层）
 ```
 
-两条规则决定了这张图：
+**业务模块之间不横向 import。** `auth` / `finance` / `recipe` / `album` 互不引用。需要共享的能力下沉到 `platform`，需要组合多个模块时见「跨模块的组合」。
 
-**横向：业务模块之间没有箭头。** `finance` / `recipe` / `album` 不得互相 import，数据库层面也不存在跨模块外键。需要共享的能力一律下沉到 `platform`。图片处理是这条纪律的第一个考验——菜谱和相册都要存图，因此「上传、生成派生图、落盘、返回路径」属于 `platform`，两个模块各自调用它、各自保存自己的元数据。
+**模块内部严格单向：** `handler → service → repo`。反向引用与跨层跳跃（handler 直接调 repo）都不允许。
 
-**纵向：模块内部严格单向。** `handler → service → repo`，反向引用与跨层跳跃（handler 直接调 repo）都不允许。
+这两条目前靠纪律，不靠工具。将来可以用 `golangci-lint` 的 `depguard` 把它们变成编译失败，现在没做。
 
-## 平台层
+### 每个业务模块三层
 
-`internal/platform` 下每个包只做一件事，且都被刻意做薄——它是「共享能力」的落点，不是「杂物抽屉」。
+目录**按模块**划分而不是按层：`internal/finance/{handler,service,repo}`。这样一个模块就是一个目录——改一个功能时三层在眼前，删或搬走一个模块是删一个目录。
+
+| 层 | 职责 | 边界 |
+| --- | --- | --- |
+| **handler** | 绑定与校验请求、DTO ↔ 领域类型转换、调 service、领域错误 → HTTP 状态码 | 不含业务规则，不碰数据库 |
+| **service** | 业务规则所在地：今天可用的计算、月末结算、大额开销写存款流水、「今天做了」的计数 | 依赖 repo **接口**与 `platform` 的时钟 |
+| **repo** | 唯一写 SQL 的地方 | 返回模块内的领域结构体，不返回行对象、也不返回 OpenAPI 生成的类型 |
+
+**没有例外。** `auth` 有端点、有规则（argon2id 参数、失败锁定、会话有效期）、有自己的表，所以它是业务模块，照样三层——不因为「听起来像基础设施」就塞进 `platform`。
+
+**不套三层的**只有 `config` / `log` / `db` / `httpx` 这一类：不暴露端点，也没有业务规则可写。
+
+**类型的流向**：repo 与 service 之间流动领域结构体，OpenAPI 生成的 DTO 只出现在 handler 层。这层映射代码是刻意付出的成本，换来的是**契约变更不会穿透到业务规则**。
+
+**接口一律定义在使用它的一侧**（service 包定义它需要的 repo 接口，handler 包定义它需要的 service 接口），只列真正用到的方法，由下层的具体类型隐式满足。除此之外不引入抽象。repo 接口同时是测试缝，四条缝各测什么见 [`testing.md`](testing.md)。
+
+**事务边界在 service 层声明**，句柄传给 repo——句柄的具体形态见 OQ-2。
+
+### 跨模块的组合
+
+据点主页要同时显示今天可用、最近一段回忆、一道菜谱。**做法是每个模块各自暴露一个 `summary` 端点，前端并发取三个。**
+
+理由不是「保护边界」这种大词，是两条具体的：
+
+- 后端**一行聚合代码都不用写**——三个 `summary` 端点本来就要有。
+- **改一张表只动一处。** 假如写成一个 `/api/home`、在一个 service 里 join 三边的表，`event` 的结构就有两个地方知道；哪天把封面从 `event` 的字段挪到 `photo` 的标记，你改了 album 的 repo，主页会碎——而那条 SQL 不在你的视线里。
+
+将来若真需要一次请求拿全，正确做法是新开一个**上层**模块（`internal/home`）去调三个 service：它单向依赖三者、不碰任何表，因此不违反「不横向 import」，而且三个 service 原封不动。**不要**用一个 service 直接 join 三边的表。
+
+### 平台层
+
+`internal/platform` 下每个包只做一件事，且都被刻意做薄。一样东西能进 `platform`，必须**同时**满足：它没有业务规则，且至少两个模块要用它。
 
 | 包 | 职责 | 刻意不做的事 |
 | --- | --- | --- |
 | `config` | 把环境变量读成一个已校验的 `Config` | 不读 `.env` 文件；不提供任何默认值 |
 | `log` | 构造全站唯一的 `*slog.Logger` | 不自建日志抽象，业务代码直接拿 `*slog.Logger` |
-| `db` | 连接池的构造与迁移的执行 | 不提供 query helper 或 ORM，SQL 手写在各模块 repo |
-| `httpx` | Echo 实例：中间件链与统一错误响应 | 不挂 CORS（同源）、Gzip（Cloudflare 在前）、CSRF（见 conventions） |
+| `db` | 连接池的构造与迁移的执行 | 不提供 query helper 或 ORM |
+| `httpx` | Echo 实例：中间件链与统一错误响应 | 不挂 CORS、Gzip、CSRF |
 
-**（未落地）** 还会有：`auth`（argon2id 与会话）、图片处理与文件存储、时钟接口。
+**（未落地）** 还会有：密码哈希（argon2id，无状态纯函数）、会话中间件（读 cookie → 查会话 → 写进 context）、图片处理与文件存储、时钟接口。
 
-### 「全站唯一处」清单
+注意 auth **不在**这张表里：密码哈希与会话中间件是横切能力，属于 `platform`；登录 / 登出 / 改密码这三个端点连同它们的规则和表，是 `internal/auth` 模块。
 
-有几件事只允许发生在一个地方。它们是这套结构里最容易被无意破坏的部分，因此集中列在这里：
+应用代码访问数据库一律通过 pgx 原生接口（`*pgxpool.Pool`）。`database/sql` 只出现在 `db.withGoose`——因为 goose 只认它，用完即关，不参与请求路径。
 
-| 这件事 | 唯一发生在 |
-| --- | --- |
-| 依赖装配（手写 `new`，不引入 DI 框架） | `cmd/vellum` 的 `runServe` |
-| 拼装 Postgres DSN | `config.Config.DSN()` |
-| 出现 `database/sql` | `db.withGoose`——因为 goose 只认它，用完即关，不参与请求路径 |
-| 写 SQL | **（未落地）** 各模块的 repo 层，且每个 repo 只访问自己的 schema |
-| 构造 API 客户端 | `web/src/api/client.ts` |
-| 决定错误响应的形状 | `httpx.errorHandler`，产出契约里的 `api.Error` |
+### 契约管线
 
-应用代码访问数据库一律通过 pgx 原生接口（`*pgxpool.Pool`）。
+`api/openapi.yaml` 是前后端之间的唯一约定。`make gen` 展开成三份产物：`internal/api/types.gen.go` 与 `internal/api/server.gen.go`（都由 oapi-codegen 生成，两份配置分开是为了让「数据形状」与「路由」在 diff 里各归各的），以及 `web/src/api/schema.d.ts`（openapi-typescript）。生成产物提交进版本库，CI 用 `make gen-check` 重新生成并比对。
 
-## 一个请求的生命周期
+端点按模块分组：`/api/auth/*`、`/api/finance/*`、`/api/recipes/*`、`/api/album/*`。
 
-中间件顺序即嵌套顺序，最先加的在最外层：
+骨架期只有一个 `Handler` 实现整个 `ServerInterface`；四个模块进来后怎么共同满足它，见 OQ-1。
 
-```
-RequestID → 访问日志 → Recover → handler
-```
+### 请求与启动
 
-顺序不是随意的：
+这两处的规则已经写在代码里，理由在注释里，不在这里重复：
 
-- **RequestID 在最外层**，因为后两者都要用它。它把 ID 写在响应头上，因此下游从响应头取，客户端有没有自带 `X-Request-Id` 都不影响。
-- **访问日志在 Recover 之外**，是为了让 panic 转成的 500 也被记进访问日志。反过来的话，恰恰是最需要日志的那些请求没有日志行。
-- **Recover 配了 `DisableErrorHandler`**，让 panic 变成一个普通 error 继续向上传，从而与其他任何 500 走完全同一条路（统一错误处理器 → 访问日志），而不是就地岔出去。
+- 中间件链与统一错误处理：`internal/platform/httpx/httpx.go`
+- 启动顺序（配置 → `Ping` → 装路由 → `Start`）与优雅关停：`cmd/vellum/main.go`
 
-错误响应统一由 `httpx.errorHandler` 产出，形状是契约里的 `Error`。两条规则：
+只有两条是写新 handler 时要守的，所以留在这里：
 
 - **5xx 的真实原因只进日志，不进响应体。** 站主看不懂 SQL 错误，公网上的陌生人不该看到我们的表名。
-- **`Response().Committed` 之后直接返回。** 响应已经开始写出时改不了状态码，再写只会得到一个撕裂的响应体。
+- **日志级别跟着状态码走**（5xx → ERROR、4xx → WARN、其余 INFO），这样 `level=ERROR` 是一个可以直接接告警的信号。
 
-日志级别跟着状态码走（5xx → ERROR、4xx → WARN、其余 INFO），这样 `level=ERROR` 就是一个可以直接接告警的信号。
+领域错误怎么表达才能被 handler 稳定地映射成状态码，见 OQ-3。
 
-## 启动与关停
+## 纪律
 
-`cmd/vellum` 有两个子命令，`serve` 与 `migrate`。启动顺序是刻意的，每一步都把一类失败挪到尽可能早的时刻：
+编译器和 linter 不会提醒你的约定。违反了会出事。
 
-1. **加载配置**——在任何子命令之前。缺变量就在这里失败，而不是让某个子命令跑到一半才发现自己少了点什么。
-2. **`db.Open` 并 `Ping`**——`pgxpool.New` 是惰性的，不 Ping 的话一个拼错的 DSN 要到第一次查询才暴露。
-3. **装配路由**——`RegisterHandlersWithBaseURL(e, handler, "/api")`。契约里 `servers` 写 `/api`、`paths` 写 `/healthz`，前缀在这里补上。
-4. **`e.Start` 放进 goroutine**，主流程去等信号。错误通道缓冲为 1，没人接收时也不会泄漏那个 goroutine。
+### GET 不得有副作用
 
-关停：`SIGINT` / `SIGTERM` 取消根 context，`Shutdown` 用一个**新的** `context.Background()` 加 10 秒超时——用已经被取消的 ctx 会让「优雅关闭」在开始的那一刻就超时。
+任何 `GET`（以及 `HEAD`）都不得改变服务端状态，所有写操作一律走 `POST` / `PUT` / `PATCH` / `DELETE`。
 
-**迁移是独立子命令，不是服务启动时的一步。** 部署流程是 `pull → migrate → up -d`：迁移失败就中止、不切换应用版本，应用因此不会陷入崩溃循环。
+**这不是风格偏好，是本项目不上 CSRF 中间件的安全前提。** 会话通过 `SameSite=Lax` cookie 传递：跨站的顶层导航 `GET`（别人页面上的一个链接或 `<img src>`）**会**带上 cookie，跨站的 `POST` / `PUT` / `DELETE` 与所有跨站 `fetch` 不会。所以 `SameSite=Lax` 只在「写操作全部是非 `GET` 方法」这个前提下才等价于 CSRF 防护。一旦出现一个会写库的 `GET`，攻击者只要让站主访问一个含 `<img src="https://vellum.example/api/...">` 的页面，就能带着站主的会话完成那次写入，而站内没有任何一层会拦下它。
 
-## 契约管线
+具体到实现：「今天做了」（`cook`）、月末结算的惰性触发、登出，全部是 `POST`。
 
-`api/openapi.yaml` 是前后端之间的唯一约定，`make gen` 把它展开成三份产物：
+**唯一被允许的例外是月末结算的惰性触发**：任意 API 请求（含 `GET`）进入时都可能补齐它。它被允许，是因为 (1) 它不接受任何来自请求的输入，纯粹是时间的函数；(2) 它是幂等的，同一个月只会结算一次。攻击者诱发它得到的结果与站主自己打开页面完全相同，因此没有攻击面。**新增第二个例外必须先在这里论证为什么它同样没有攻击面**——会话的 `last_used_at`（OQ-4）与预算行的惰性创建（OQ-12）都是候选。
 
-| 产物 | 由谁生成 | 配置 |
-| --- | --- | --- |
-| `internal/api/types.gen.go` | oapi-codegen（models） | `api/cfg-types.yaml` |
-| `internal/api/server.gen.go` | oapi-codegen（echo-server） | `api/cfg-server.yaml` |
-| `web/src/api/schema.d.ts` | openapi-typescript | 无 |
+### 配置无默认值
 
-拆成两份 oapi-codegen 配置、输出到同一个包的两个文件，是为了让「数据形状」与「路由与接口」在 diff 里各归各的——改一个 schema 不会让路由表跟着翻动。`cfg-types.yaml` 关掉了剪枝（`skip-prune`），否则没被任何 path 引用的 `Error` schema 会被丢掉。
+`internal/platform/config` 读取的每一个环境变量都**没有默认值，缺一即启动失败**。有默认值的配置项会在生产上静默地用错值跑起来——一个连到本地库的默认 DSN、一个 `dev` 的默认 `APP_ENV`，本地永远复现不了，上线才发现。启动失败是刺耳的，但它发生在部署那一秒，而不是三周后。
 
-生成产物**提交进版本库**，CI 用 `make gen-check` 重新生成并比对。落实契约的手段有两个：
+`.env` 只被 Makefile `include` 并 export，**二进制本身不认识 `.env` 文件**：本地与生产的配置来源是同一条路径（进程环境变量）。
 
-- **编译期断言** `var _ ServerInterface = (*Handler)(nil)`——契约新增端点而实现没跟上，构建就失败。「端点有没有漏实现」由编译器回答，不靠人对着 yaml 数。
-- **前端** 通过 `createClient<paths>` 拿到类型，写错一个路径就是一个编译错误。
+### 改接口的顺序
 
-端点按模块分组：`/api/auth/*`、`/api/finance/*`、`/api/recipes/*`、`/api/album/*`。**每个业务模块各自暴露一个 `summary` 端点**，据点主页的聚合发生在前端——后端不做跨模块联合查询，这是对模块边界的保护。
+永远是：改 `openapi.yaml` → `make gen` → 改实现。**不允许**先写实现再回头补契约。手改生成文件（`*.gen.go`、`schema.d.ts`）没有意义——下一次 `make gen` 就覆盖，而 CI 会先一步拦下。
 
-**（待定）** 骨架期只有一个 `Handler` 实现整个 `ServerInterface`。三个模块进来后，各模块的 handler 包如何共同满足这一个生成接口（一个组合结构体嵌入各模块 handler，还是别的写法），留到认证模块落地时定，那时会把结论补在这里。
+### 时间
 
-## 数据库
+数据库一律 `timestamptz` 存 UTC。「今天」「本月」一律按**站点时区**（`SITE_TIMEZONE`）计算，不是 UTC 日，也不是浏览器时区日——本站只有一个用户，时区是**配置**而不是用户属性。业务代码不直接调 `time.Now()`，一律走 `platform` 的时钟接口，否则涉及时间的规则无法被测试。
 
-一个 database，四个 schema：`platform`、`finance`、`recipe`、`album`。**schema 在数据库层面物理执行模块边界**——跨模块外键在物理上不会出现。每个模块的 repo 只访问自己的 schema。
+### 金额
 
-约定：
+一律以 RUB 最小单位（копейка）存为 `bigint`，**禁止浮点**——浮点在钱上是错误来源而不是精度选择。前端展示时才除以 100。JSON 里用什么类型传见 OQ-14。
 
-- 一切能表达的约束都写进 schema（`NOT NULL`、`CHECK`、外键、唯一索引）。骨架里已有一个例子：`account_singleton` 是一个常量表达式上的唯一索引，让「单用户站点最多一行」由数据库强制，而不是靠应用代码自觉。
-- 多表写入放在显式事务里，**事务边界在 service 层声明**，句柄传给 repo。
-- 时间一律 `timestamptz` 存 UTC；「今天」「本月」按 `SITE_TIMEZONE` 计算。
-- 金额一律 RUB 最小单位存 `bigint`，禁止浮点。
-- 照片 EXIF 用 `jsonb`（厂商字段本身无固定 schema）。不使用全文检索——菜谱规模在两百条以内，`ILIKE` 足够。
+### 设计令牌与文案
 
-迁移用 goose，SQL 通过 `embed` 编进二进制。`migrations` 包只有一个 `embed.FS`，不含逻辑。
+所有颜色、间距、字号、圆角、动效尺度来自同一份 CSS 变量文件，**组件内禁止出现硬编码的颜色值**。这不是洁癖：这个站的视觉基调会被反复调整，而每一个散落在组件里的 `#3a2f1e` 都会在下一次调色时被漏掉一个，整站风格就是这样漂移的。
 
-## 业务模块的三层（未落地）
+同理，**用户可见的文案集中放置**——日文命名表迟早会来替换它们（见 [`PRD.md`](../PRD.md) 的「两条产品约束」），散在 JSX 里的文案会让那次替换从半小时变成一整天。
 
-每个模块内部固定分三层，各占一个包（如 `internal/finance/handler`、`.../service`、`.../repo`）：
+## 不做什么
 
-| 层 | 职责 | 边界 |
-| --- | --- | --- |
-| **handler** | 绑定与校验请求、DTO ↔ 领域类型转换、调 service、领域错误 → HTTP 状态码 | 不含业务规则，不碰数据库 |
-| **service** | 业务规则所在地：`今天可用` 的计算、月末结算、大额开销写存款流水、`今天做了` 的计数 | 依赖 repo **接口**与 `platform` 的时钟 |
-| **repo** | 唯一写 SQL 的地方 | 返回模块内的领域结构体，不返回行对象、也不返回 OpenAPI 生成的类型 |
+### 总体形态
 
-**类型的流向**：repo 与 service 之间流动领域结构体；OpenAPI 生成的 DTO 只出现在 handler 层。这层映射代码是刻意付出的成本——换来的是业务层不被契约绑死，契约变更不会穿透到业务规则。
+**Go 单体二进制 + 一个 Postgres 实例。** 四个模块是四个包，不是四个服务——全部负载来自一个人的手机，任何形式的水平拆分只会增加故障面。**前端产物 `embed` 进同一个二进制**，部署产物只有一个可执行文件，没有「静态文件放哪、nginx 怎么配、版本对不对得上」这类问题。
 
-**接口一律定义在使用它的一侧**（service 包定义它需要的 repo 接口，handler 包定义它需要的 service 接口），只列真正用到的方法，由下层的具体类型隐式满足。除此之外不引入抽象，也不引入 mock 生成框架。
+**HTTP 框架用 Echo v4。** 理由不是 Echo 比 chi/gin 好，而是 `oapi-codegen` 的 `echo-server` 目标现成可用，且它的 `HTTPErrorHandler` 给了一个天然的「唯一决定错误响应形状」的地方（理念二）。
 
-repo 接口的存在同时是测试缝：
+**数据库不分 schema，全部表放在默认 schema。** 曾经想用 schema 让模块边界成为物理事实，但 Postgres 本来就允许跨 schema 外键——它并没有真的挡住什么，只是增加了迁移与连接配置的麻烦。边界靠纪律（将来靠 lint），不靠 schema。
 
-| 缝 | 用什么驱动 | 测什么 |
-| --- | --- | --- |
-| repo | **真实 Postgres**，跑完全部迁移 | SQL 本身：写入读回、筛选排序、约束真的拒绝坏数据、事务回滚无残留 |
-| service | 手写 fake repo（内存 map）+ 可控时钟 | 业务规则与它的边界：超支、零预算、月末最后一天、跨月 |
-| handler | Echo `httptest` + fake service | HTTP 表层：参数校验 → 400、未找到 → 404、未登录 → 401 |
-| 端到端 | 完整装配 + 真实 Postgres，走 HTTP | 只跑主干：装配是否正确、中间件是否真的挂上、事务是否真的提交 |
+**迁移用 goose，SQL 通过 `embed` 编进二进制**，且是独立子命令而不是服务启动时的一步（原因见 [`operations.md`](operations.md)）。
 
-**一个行为只在它归属的那一层被详尽测试**，其余层只测「有没有正确地接起来」。绝不用 sqlmock 一类的伪数据库测 SQL。fake repo 保持朴素——不复刻 SQL 语义，也不模拟事务。
+**任务运行器用 `make`**（最初的 spec 写的是 `just`）：少一个需要手动安装的工具，且 `Makefile` 顺带承担了 `include .env` 并 export，让同一份 `.env` 对 docker compose、`go run` 与 vite 同时生效。
 
-前端刻意不建测试缝，只在 M0 引入一个 Playwright 冒烟测试。
+### 明确不引入
 
-## 本地开发环境的特殊性
+| 不引入 | 因为 |
+| --- | --- |
+| **DI 框架** | 依赖在 `cmd/vellum` 里手写 `new`，装配代码不到一屏（理念五） |
+| **mock 生成框架** | fake 一律手写在测试文件里。手写的 fake 会因为「写起来麻烦」而逼你保持接口窄，生成的不会 |
+| **第四层**（usecase / 独立 domain / CQRS） | 三层已经能回答「这段逻辑写在哪」，第四层让这个问题重新需要讨论（理念五） |
+| **ORM / query builder** | SQL 手写在各模块 repo |
+| **消息队列 / 后台任务 / 任何调度器** | 图片处理在请求内同步完成；月末结算靠惰性触发。引入任何一个都会让运维组件从 2 个变成 3 个，还会多一个「它昨晚跑了没有」的每月疑问 |
+| **JWT** | 会话是服务端的一行记录，登出即删除。JWT 的卖点是无状态与跨服务，这里两个都不需要，代价却是无法立即吊销 |
+| **OAuth / 第三方登录 / Passkey** | 一个用户，一个密码，argon2id |
+| **CSRF 中间件** | `SameSite=Lax` cookie +「GET 不得有副作用」等价于 CSRF 防护 |
+| **CORS / Gzip 中间件** | 同源，不需要 CORS；Cloudflare 在前，不需要自己压 |
+| **Service Worker** | 添加到主屏是为了打开快，不是为了离线可用 |
+| **对象存储（S3 等）** | 原图存 VM 文件系统。一千张照片，一块盘 |
+| **Postgres 全文检索** | 见 [`data-model.md`](data-model.md) |
+| **Kubernetes** | 一个进程，一台机器 |
+| **性能优化与容量规划** | 数据规模上限：照片一千张、菜谱两百道、开销记录每年数百条 |
 
-代码放在 `/mnt/z`——WSL 挂载的 Windows 盘，走 9p 协议。它的两个后果散落在三个配置文件里，集中记在这里，免得日后有人「顺手清理」掉：
+### 两个学习目标是刻意保留的非最优选择
 
-| 适配 | 在哪 | 不做会怎样 |
-| --- | --- | --- |
-| pnpm store 指向 `/mnt/z/.pnpm-store` | `web/.npmrc` | store 与 `node_modules` 跨文件系统，硬链接失效，pnpm 退化成整目录复制——这是本项目最慢的操作 |
-| Vite 用轮询监听（1 秒） | `web/vite.config.ts` | 9p 上 inotify 不工作，完全收不到文件变更 |
-| Postgres 数据用 named volume | `compose.yaml` | bind mount 会让数据落在 9p 上，被它的 IO 拖累 |
+站主希望借这个项目扎实地学会**正确使用 Postgres**与**一套完整的 CI/CD 工作流**。以本项目的数据规模，Postgres 相对于 SQLite 没有任何技术收益，完整的 CI/CD 链路同理——选择它们是为了学会它们。
 
-另外 `_ "time/tzdata"` 把时区库编进二进制：零成本，换来的是将来构建成 scratch/alpine 镜像时 `time.LoadLocation(SITE_TIMEZONE)` 不会在生产上找不到 `/usr/share/zoneinfo`——而这个失败在本地永远复现不了。
-
-## 与 spec 的偏差
-
-spec 里写的技术决策，实现时有意改动的部分记录在这里：
-
-| spec | 实现 | 理由 |
-| --- | --- | --- |
-| 任务运行器用 `just` | **`make`** | 少一个需要手动安装的工具。`Makefile` 顺带承担了 `include .env` 并 export 的职责，让同一份 `.env` 对 docker compose、`go run` 与 vite 同时生效；`just` 需要额外配置才能做到同一件事 |
-
-其余决策与 spec 一致。新增偏差时请补在这张表里——一条没有记录的偏差，三个月后会变成一次「为什么这里和文档不一样」的考古。
+这两项被限定在**「用对」而非「炫技」**的范围内：不做为了练手而制造的合成负载、性能实验或多余的基础设施。**所有其他技术决策一律取最简方案。**

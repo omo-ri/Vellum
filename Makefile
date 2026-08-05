@@ -63,6 +63,12 @@ migrate-new: ## 新建一个空迁移：make migrate-new name=add_expense
 
 # --- 契约与代码生成 ---
 
+# web/package.json 里的 typescript 钉在 ^5，不要升到 7。TypeScript 7 是 Go 重写的原生
+# 编译器，不再暴露 ts.factory 那套 AST 构造 API，而 openapi-typescript 正是靠它生成
+# schema.d.ts 的——升上去之后下面这条 openapi-typescript 会以
+# `TypeError: Cannot read properties of undefined (reading 'createKeywordTypeNode')` 失败。
+# 而 tsc --noEmit 仍然正常，所以 make lint 不会替你发现这件事。
+# pnpm peers check 会报出这个冲突。哪天 openapi-typescript 声明支持 ^7，这段就可以删。
 gen: ## 从 api/openapi.yaml 生成 Go 与 TS 两端产物
 	go tool oapi-codegen -config api/cfg-types.yaml api/openapi.yaml
 	go tool oapi-codegen -config api/cfg-server.yaml api/openapi.yaml

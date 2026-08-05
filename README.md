@@ -78,29 +78,40 @@ internal/
   finance/ recipe/ album/    三个业务模块（尚未创建，各自 handler/service/repo 三层）
 migrations/          goose 的 SQL，通过 embed 编进二进制
 web/                 Vite + React + TypeScript 前端
-docs/                工程纪律与架构说明
+docs/                工程文档，一份一个问题（见下面的文档地图）
 .scratch/            本仓库的 issue tracker：spec 与工单都是 markdown 文件
 .agents/             第三方 agent 技能，来自 mattpocock/skills（MIT，见 .agents/README.md）
 ```
 
 ## 文档地图
 
+每份文档回答一个问题，且只有它回答那个问题。要找的东西不在这份文档的职责里，就去它链接的那一份——**不要在两处写同一件事**。
+
+根目录是产品与词汇，`docs/` 是工程：
+
 | 文档 | 读它来回答 |
 | --- | --- |
+| [PRD.md](PRD.md) | 要做什么、为谁做、**明确不做什么**，以及 M0–M4 为什么是这个顺序 |
 | [UBIQUITOUS_LANGUAGE.md](UBIQUITOUS_LANGUAGE.md) | 一个领域概念叫什么、代码标识符写成什么。**与其他文档冲突时以它为准** |
-| [docs/architecture.md](docs/architecture.md) | 代码怎么分层、边界画在哪、一个请求经过什么、某段逻辑该写在哪个包 |
-| [docs/conventions.md](docs/conventions.md) | 那些编译器和 linter 管不到、但违反了会出事的约定 |
-| [.scratch/vellum-mvp/spec.md](.scratch/vellum-mvp/spec.md) | 要做什么、为什么做、**明确不做什么**，以及 M0–M4 的划分 |
+| [docs/architecture.md](docs/architecture.md) | 代码该写在哪、有哪些不能违反的约定、为什么不用某个技术 |
+| [docs/data-model.md](docs/data-model.md) | 库里有哪些表、每张表为什么长这样 |
+| [docs/testing.md](docs/testing.md) | 一个行为该在哪一层被测、用什么驱动 |
+| [docs/operations.md](docs/operations.md) | 本地怎么跑起来、线上怎么上线、有哪些环境坑 |
+| [docs/open-questions.md](docs/open-questions.md) | **还有哪些细节没想明白**（带稳定编号 `OQ-n`，讨论时直接引用） |
 | [docs/agents/](docs/agents/) | agent 在本仓库怎么读写工单 |
+
+一条判断规则：**只在某一行代码旁边才有意义的知识，写在那行代码的注释里，不写进文档**（中间件为什么是这个顺序 → `httpx.go`；`skip-prune` 为什么要关 → `cfg-types.yaml`）。文档只装「AI 每次写新代码时要遵守的规则」。
+
+`.scratch/vellum-mvp/spec.md` 是这套文档的来源，现已存档，不再更新。
 
 ## 四条不可动摇的约定
 
-细节与理由都在 [docs/conventions.md](docs/conventions.md)，这里只列结论：
+细节与理由都在 [docs/architecture.md](docs/architecture.md) 的「纪律」，这里只列结论：
 
 1. **`GET` 不得有副作用。** 这不是风格偏好——它是本项目不上 CSRF 中间件的安全前提。惟一被允许的例外是月末结算的惰性触发。
 2. **契约先行。** 改接口的顺序永远是 `openapi.yaml` → `make gen` → 实现。手改 `*.gen.go` 或 `schema.d.ts` 没有意义。
 3. **配置无默认值。** 缺一个环境变量，进程就拒绝启动。
-4. **模块不得互相 import。** `finance` / `recipe` / `album` 之间没有引用，数据库层面也没有跨模块外键；需要共享的能力下沉到 `platform`。
+4. **模块不得横向 import。** `auth` / `finance` / `recipe` / `album` 之间没有引用，也不写跨模块外键；需要共享的能力下沉到 `platform`，需要组合多个模块时在前端组合。
 
 金额一律以 RUB 最小单位存 `bigint`（禁止浮点）；时间一律存 UTC，「今天」「本月」按 `SITE_TIMEZONE` 计算。
 
@@ -117,4 +128,6 @@ docs/                工程纪律与架构说明
 - [ ] **PWA**：manifest、图标、全屏显示模式（不做 Service Worker 离线缓存）。
 - [ ] **一个 Playwright 冒烟测试**：登录 → 据点主页 → 三个模块入口可达。
 
-M0 刻意排在所有功能之前：一个只返回健康状态、但已经能 `git push` 自动上线的服务，比一个功能完整却从未部署过的本地项目更有价值。
+其中几项被未决问题挡着——认证要先定 OQ-1 ~ OQ-4，测试脚手架要先定 OQ-9，CI/CD 要先定 OQ-10 与 OQ-11，见 [docs/open-questions.md](docs/open-questions.md)。
+
+M0 为什么排在所有功能之前，见 [PRD.md](PRD.md) 的里程碑一节。
