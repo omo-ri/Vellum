@@ -2,7 +2,7 @@
 
 这份文档回答的是**「这个东西在本地怎么跑起来、在线上怎么上线」**。
 
-日常命令清单在 [`README.md`](../README.md)，这里只讲那些**命令背后的机制与坑**。
+日常命令清单由 `make help` 列出，这里只讲那些**命令背后的机制与坑**。
 
 ## 两种环境，一条配置通路
 
@@ -58,8 +58,6 @@ SSH 到 VM：pull → migrate → up -d
 - `dev` 分支只跑检查与测试，不部署。
 - 提交前钩子只跑 `gofmt` 与 `tsc`，**不跑测试**——钩子慢到让人想绕过，就等于没有钩子。
 - 依赖 Postgres 的测试用 build tag 或环境变量区分：本地可以只跑不依赖数据库的 service / handler 层测试以获得秒级反馈，CI 上一律全跑。
-
-流水线里还有几处没有定案（镜像 tag、compose 文件怎么到 VM 上、生产 secrets 怎么维护），见 [`open-questions.md`](open-questions.md) 的 OQ-11。
 
 ## 健康检查
 

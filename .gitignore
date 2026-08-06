@@ -5,7 +5,7 @@
 #
 # 刻意**不**忽略的东西，都是有理由留在库里的：
 #   internal/api/*.gen.go、web/src/api/schema.d.ts —— 契约的生成产物，CI 靠
-#     `make gen-check` 重新生成并比对，不提交就无从比对（见 docs/conventions.md）。
+#     `make gen-check` 重新生成并比对，不提交就无从比对（见 docs/architecture.md）。
 #   web/pnpm-lock.yaml —— 锁定前端依赖。
 #   .agents/skills/ 与 skills-lock.json —— 随仓库钉死的 agent 技能。
 #   .scratch/ —— 本仓库的 issue tracker（见 docs/agents/issue-tracker.md）。

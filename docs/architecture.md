@@ -2,7 +2,7 @@
 
 这份文档回答的是**「代码该写在哪、有哪些不能违反的约定、以及为什么」**。
 
-它描述结构，不描述功能——要做什么看 [`PRD.md`](../PRD.md)，术语怎么叫看 [`UBIQUITOUS_LANGUAGE.md`](../UBIQUITOUS_LANGUAGE.md)，库里有哪些表看 [`data-model.md`](data-model.md)。
+它描述结构，不描述功能——要做什么看 [`PRD.md`](../PRD.md)，术语怎么叫看 [`UBIQUITOUS_LANGUAGE.md`](../UBIQUITOUS_LANGUAGE.md)。库里有哪些表以 `migrations/` 下的 SQL 为准。
 
 一条规则要写进这份文档，必须同时满足两个条件：**我理解并认同它为什么这么做**，且 **AI 照着能稳定执行**。写不出「不遵守会出什么具体的错」的条目不写；只靠「将来可能需要」支撑的条目也不写——那个理由没有下界，它能同时论证第四层、事件总线和一切抽象。
 
@@ -72,7 +72,7 @@ internal/api  internal/platform  migrations       业务模块
 
 **接口一律定义在使用它的一侧**（service 包定义它需要的 repo 接口，handler 包定义它需要的 service 接口），只列真正用到的方法，由下层的具体类型隐式满足。除此之外不引入抽象。repo 接口同时是测试缝，四条缝各测什么见 [`testing.md`](testing.md)。
 
-**事务边界在 service 层声明**，句柄传给 repo——句柄的具体形态见 OQ-2。
+**事务边界在 service 层声明**，句柄传给 repo。
 
 ### 跨模块的组合
 
@@ -108,7 +108,7 @@ internal/api  internal/platform  migrations       业务模块
 
 端点按模块分组：`/api/auth/*`、`/api/finance/*`、`/api/recipes/*`、`/api/album/*`。
 
-骨架期只有一个 `Handler` 实现整个 `ServerInterface`；四个模块进来后怎么共同满足它，见 OQ-1。
+骨架期只有一个 `Handler` 实现整个 `ServerInterface`。
 
 ### 请求与启动
 
@@ -122,8 +122,6 @@ internal/api  internal/platform  migrations       业务模块
 - **5xx 的真实原因只进日志，不进响应体。** 站主看不懂 SQL 错误，公网上的陌生人不该看到我们的表名。
 - **日志级别跟着状态码走**（5xx → ERROR、4xx → WARN、其余 INFO），这样 `level=ERROR` 是一个可以直接接告警的信号。
 
-领域错误怎么表达才能被 handler 稳定地映射成状态码，见 OQ-3。
-
 ## 纪律
 
 编译器不会提醒你的约定。违反了会出事。
@@ -136,7 +134,7 @@ internal/api  internal/platform  migrations       业务模块
 
 具体到实现：「今天做了」（`cook`）、月末结算的惰性触发、登出，全部是 `POST`。
 
-**唯一被允许的例外是月末结算的惰性触发**：任意 API 请求（含 `GET`）进入时都可能补齐它。它被允许，是因为 (1) 它不接受任何来自请求的输入，纯粹是时间的函数；(2) 它是幂等的，同一个月只会结算一次。攻击者诱发它得到的结果与站主自己打开页面完全相同，因此没有攻击面。**新增第二个例外必须先在这里论证为什么它同样没有攻击面**——会话的 `last_used_at`（OQ-4）与预算行的惰性创建（OQ-12）都是候选。
+**唯一被允许的例外是月末结算的惰性触发**：任意 API 请求（含 `GET`）进入时都可能补齐它。它被允许，是因为 (1) 它不接受任何来自请求的输入，纯粹是时间的函数；(2) 它是幂等的，同一个月只会结算一次。攻击者诱发它得到的结果与站主自己打开页面完全相同，因此没有攻击面。**新增第二个例外必须先在这里论证为什么它同样没有攻击面**——会话的 `last_used_at` 与预算行的惰性创建都是候选。
 
 ### 配置无默认值
 
@@ -154,7 +152,7 @@ internal/api  internal/platform  migrations       业务模块
 
 ### 金额
 
-一律以 RUB 最小单位（копейка）存为 `bigint`，**禁止浮点**——浮点在钱上是错误来源而不是精度选择。前端展示时才除以 100。JSON 里用什么类型传见 OQ-14。
+一律以 RUB 最小单位（копейка）存为 `bigint`，**禁止浮点**——浮点在钱上是错误来源而不是精度选择。前端展示时才除以 100。
 
 ### 设计令牌与文案
 
@@ -192,7 +190,7 @@ internal/api  internal/platform  migrations       业务模块
 | **CORS / Gzip 中间件** | 同源，不需要 CORS；Cloudflare 在前，不需要自己压 |
 | **Service Worker** | 添加到主屏是为了打开快，不是为了离线可用 |
 | **对象存储（S3 等）** | 原图存 VM 文件系统。一千张照片，一块盘 |
-| **Postgres 全文检索** | 见 [`data-model.md`](data-model.md) |
+| **Postgres 全文检索** | 菜谱在两百条以内，按名字搜索用 `ILIKE` 足够。`tsvector` + 触发器 + GIN 索引是三份要长期维护的东西，换来的性能差别在这个数据量上测不出来 |
 | **Kubernetes** | 一个进程，一台机器 |
 | **性能优化与容量规划** | 数据规模上限：照片一千张、菜谱两百道、开销记录每年数百条 |
 
