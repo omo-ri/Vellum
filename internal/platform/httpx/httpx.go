@@ -57,12 +57,11 @@ func New(logger *slog.Logger) *echo.Echo {
 		// 这样它会依次经过访问日志中间件与统一错误处理器，跟其他任何 500 走同一条路。
 		DisableErrorHandler: true,
 		LogErrorFunc: func(c echo.Context, err error, stack []byte) error {
-			logger.ErrorContext(c.Request().Context(), "panic recovered",
-				slog.String("request_id", requestID(c)),
-				slog.String("method", c.Request().Method),
-				slog.String("uri", c.Request().RequestURI),
-				slog.Any("error", err),
-				slog.String("stack", string(stack)),
+			logger.LogAttrs(c.Request().Context(), slog.LevelError, "panic recovered",
+				append(requestAttrs(c),
+					slog.Any("error", err),
+					slog.String("stack", string(stack)),
+				)...,
 			)
 			return err
 		},
@@ -133,11 +132,8 @@ func errorHandler(logger *slog.Logger) echo.HTTPErrorHandler {
 		// 陌生人不该看到我们的表名。
 		if status >= http.StatusInternalServerError {
 			message = "服务器内部错误"
-			logger.ErrorContext(c.Request().Context(), "request failed",
-				slog.String("request_id", requestID(c)),
-				slog.String("method", c.Request().Method),
-				slog.String("uri", c.Request().RequestURI),
-				slog.Any("error", err),
+			logger.LogAttrs(c.Request().Context(), slog.LevelError, "request failed",
+				append(requestAttrs(c), slog.Any("error", err))...,
 			)
 		}
 
@@ -154,11 +150,22 @@ func errorHandler(logger *slog.Logger) echo.HTTPErrorHandler {
 			writeErr = c.JSON(status, body)
 		}
 		if writeErr != nil && !errors.Is(writeErr, context.Canceled) {
-			logger.ErrorContext(c.Request().Context(), "failed to write error response",
-				slog.String("request_id", requestID(c)),
-				slog.Any("error", writeErr),
+			logger.LogAttrs(c.Request().Context(), slog.LevelError, "failed to write error response",
+				append(requestAttrs(c), slog.Any("error", writeErr))...,
 			)
 		}
+	}
+}
+
+// requestAttrs 是每条请求级日志都要带的三个字段：定位到是哪一次请求，靠它们就够。
+// 三处错误日志共用同一份，将来加一个字段只改这里。
+//
+// 访问日志不走这里——它的值来自中间件算好的 RequestLoggerValues，而不是 echo.Context。
+func requestAttrs(c echo.Context) []slog.Attr {
+	return []slog.Attr{
+		slog.String("request_id", requestID(c)),
+		slog.String("method", c.Request().Method),
+		slog.String("uri", c.Request().RequestURI),
 	}
 }
 

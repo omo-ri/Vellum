@@ -5,7 +5,6 @@
 package log
 
 import (
-	"io"
 	"log/slog"
 	"os"
 )
@@ -16,14 +15,10 @@ import (
 // 日志一律写 stdout 而不是 stderr：容器化部署下 stdout 就是日志通道，而 stderr
 // 留给「进程起不来」这类致命信息（见 main 的 os.Exit 分支），两者不该混在一起。
 func New(dev bool) *slog.Logger {
-	return newWith(os.Stdout, dev)
-}
-
-func newWith(w io.Writer, dev bool) *slog.Logger {
 	opts := &slog.HandlerOptions{Level: slog.LevelInfo}
 	if dev {
 		opts.Level = slog.LevelDebug
-		return slog.New(slog.NewTextHandler(w, opts))
+		return slog.New(slog.NewTextHandler(os.Stdout, opts))
 	}
-	return slog.New(slog.NewJSONHandler(w, opts))
+	return slog.New(slog.NewJSONHandler(os.Stdout, opts))
 }

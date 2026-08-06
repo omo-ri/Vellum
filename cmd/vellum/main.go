@@ -131,16 +131,9 @@ func runServe(ctx context.Context, cfg config.Config) error {
 
 func runMigrate(ctx context.Context, cfg config.Config, args []string) error {
 	if len(args) == 0 {
-		return errors.New("migrate 需要一个动作：up、down 或 status")
+		return fmt.Errorf("migrate 需要一个动作：%s、%s 或 %s",
+			db.MigrateUp, db.MigrateDown, db.MigrateStatus)
 	}
-	switch args[0] {
-	case "up":
-		return db.Migrate(ctx, cfg.DSN())
-	case "down":
-		return db.MigrateDown(ctx, cfg.DSN())
-	case "status":
-		return db.MigrateStatus(ctx, cfg.DSN())
-	default:
-		return fmt.Errorf("未知的 migrate 动作 %q（可用：up、down、status）", args[0])
-	}
+	// 动作名的合法性由 db.Migrate 判定——这里不重复一份动作清单。
+	return db.Migrate(ctx, cfg.DSN(), db.MigrateAction(args[0]))
 }
