@@ -9,9 +9,6 @@ info:
   version: 0.1.0
 
 servers:
-  # 所有业务路径都挂在 /api 之下；非 /api 前缀的路径将来一律交给内嵌的 SPA。
-  # Go 端由 RegisterHandlersWithBaseURL(e, si, "/api") 落实这一前缀，
-  # 因此下面的 paths 只写 /api 之后的部分。
   - url: /api
 
 paths:

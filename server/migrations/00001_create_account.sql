@@ -7,8 +7,6 @@ CREATE TABLE account (
     updated_at    timestamptz NOT NULL DEFAULT now()
 );
 
--- 单用户站点：这张表最多一行，由数据库强制。
--- 常量表达式索引在每一行上都产出同一个键，因此第二行插入必然撞唯一约束。
 CREATE UNIQUE INDEX account_singleton ON account ((true));
 
 -- +goose Down
