@@ -1,0 +1,22 @@
+name: vellum
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:?DB_USER is required (cp .env.example .env)}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required (cp .env.example .env)}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME is required (cp .env.example .env)}
+    ports:
+      - "${DB_PORT:?DB_PORT is required (cp .env.example .env)}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+volumes:
+  pgdata:

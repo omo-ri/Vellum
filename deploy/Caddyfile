@@ -1,0 +1,17 @@
+vellum.mianhua.ru {
+	encode zstd gzip
+
+	root * /srv/vellum/web
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle {
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		try_files {path} /index.html
+		file_server
+	}
+}
