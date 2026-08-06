@@ -134,8 +134,8 @@ scp compose.yaml Caddyfile .env  →  docker login ghcr.io
 
 1. **重写 `docs/operations.md`**：环境矩阵加入 Caddy；部署形态改为「荷兰 VM，无 CDN 前置」；**「首次部署」与「日常部署」分成两节**；镜像 tag 与回滚；迁移兼容纪律独立成节；CI/CD 图去掉 Playwright；`/opt/vellum/` 文件清单；一句「`docker compose down -v` 会删掉全部账本，生产上永不使用 `-v`」。
 2. **改 `docs/architecture.md`**：Gzip 的理由换成 Caddy；新增纪律 **`X-Forwarded-For` 与 Echo `IPExtractor`**（点明它承载需求 5）；「不引入 CORS」理由不动（同源仍成立）。
-3. **改 `docs/testing.md`**：删前端 Playwright 一节，换成四层检查分工表；第 1 条缝写定 OQ-9 方案。
-4. **改 `docs/open-questions.md`**：删 OQ-9、OQ-10、OQ-11。
+3. **改 `docs/testing.md`**：删前端 Playwright 一节，换成四层检查分工表；第 1 条缝写定测试用 Postgres 的方案（本文件第 12 条）。
+4. ~~改 `docs/open-questions.md`~~ —— 该文件已删除，未决问题改由 `.scratch` 的 issue tracker 承载，这一步作废。
 
 ### Stage 1 — 让二进制能提供前端（纯本地，无需 docker）
 
