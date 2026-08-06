@@ -132,7 +132,7 @@
 69. 作为站主，我想让所有颜色、间距、字号来自同一份设计令牌，以便整站风格不会随着功能增加而漂移。
 70. 作为站主，我想有一个只有我能访问的组件预览页，以便调整视觉基调时能一次看到所有组件。
 
-> 面向开发者的那部分要求（CI/CD、模块边界、分层、测试）不在这里——它们不是产品需求，落点是 [`docs/architecture.md`](docs/architecture.md)、[`docs/testing.md`](docs/testing.md) 与 [`docs/operations.md`](docs/operations.md)。
+> 面向开发者的那部分要求（CI/CD、模块边界、分层、测试）不在这里——它们不是产品需求，落点是 [`docs/architecture.md`](docs/architecture.md)。
 
 ## 业务规则
 

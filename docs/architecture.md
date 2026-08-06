@@ -70,7 +70,7 @@ internal/api  internal/platform  migrations       业务模块
 
 **类型的流向**：repo 与 service 之间流动领域结构体，OpenAPI 生成的 DTO 只出现在 handler 层。这层映射代码是刻意付出的成本，换来的是**契约变更不会穿透到业务规则**。
 
-**接口一律定义在使用它的一侧**（service 包定义它需要的 repo 接口，handler 包定义它需要的 service 接口），只列真正用到的方法，由下层的具体类型隐式满足。除此之外不引入抽象。repo 接口同时是测试缝，四条缝各测什么见 [`testing.md`](testing.md)。
+**接口一律定义在使用它的一侧**（service 包定义它需要的 repo 接口，handler 包定义它需要的 service 接口），只列真正用到的方法，由下层的具体类型隐式满足。除此之外不引入抽象。repo 接口同时是测试缝。
 
 **事务边界在 service 层声明**，句柄传给 repo。
 
@@ -170,7 +170,7 @@ internal/api  internal/platform  migrations       业务模块
 
 **数据库不分 schema，全部表放在默认 schema。** 曾经想用 schema 让模块边界成为物理事实，但 Postgres 本来就允许跨 schema 外键——它并没有真的挡住什么，只是增加了迁移与连接配置的麻烦。边界靠纪律，不靠 schema。
 
-**迁移用 goose，SQL 通过 `embed` 编进二进制**，且是独立子命令而不是服务启动时的一步（原因见 [`operations.md`](operations.md)）。
+**迁移用 goose，SQL 通过 `embed` 编进二进制**，且是独立子命令而不是服务启动时的一步（原因见 `cmd/vellum/main.go` 的包注释）。
 
 **任务运行器用 `make`**（最初的 spec 写的是 `just`）：少一个需要手动安装的工具，且 `Makefile` 顺带承担了 `include .env` 并 export，让同一份 `.env` 对 docker compose、`go run` 与 vite 同时生效。
 
