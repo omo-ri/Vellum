@@ -32,6 +32,12 @@ import (
 	"vellum/internal/platform/log"
 )
 
+// gitSHA 由 make build-release 用 -ldflags -X 注入（因此必须是 var，const 注入不进去）。
+// 本地 go run 与 make build 都不注入，留着这个默认值。
+// 它只出现在启动日志里，不进 /api/healthz——健康检查回答的是「活着吗」，
+// 而不是「你是哪一版」，后者看日志。
+var gitSHA = "dev"
+
 const usage = `用法：vellum <命令>
 
 命令：
@@ -101,6 +107,7 @@ func runServe(ctx context.Context, cfg config.Config) error {
 	serverErr := make(chan error, 1)
 	go func() {
 		logger.Info("http server started",
+			slog.String("git_sha", gitSHA),
 			slog.String("addr", cfg.HTTPAddr),
 			slog.String("env", cfg.AppEnv),
 			slog.String("timezone", cfg.SiteTimezone.String()),

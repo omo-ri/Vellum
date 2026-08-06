@@ -4,7 +4,7 @@
 # 一条谁也不敢删的规则。
 #
 # 刻意**不**忽略的东西，都是有理由留在库里的：
-#   internal/api/*.gen.go、web/src/api/schema.d.ts —— 契约的生成产物，CI 靠
+#   server/internal/api/*.gen.go、web/src/api/schema.d.ts —— 契约的生成产物，CI 靠
 #     `make gen-check` 重新生成并比对，不提交就无从比对（见 docs/architecture.md）。
 #   web/pnpm-lock.yaml —— 锁定前端依赖。
 #   .agents/skills/ 与 skills-lock.json —— 随仓库钉死的 agent 技能。
@@ -33,11 +33,14 @@ go.work.sum
 # `make build` 的输出。前导 / 只匹配仓库根，不会误伤将来某个叫 vellum 的目录。
 /vellum
 
+# `make build-release` 的输出目录，也是 deploy/Dockerfile 的构建 context。
+/dist/
+
 # --- 前端 ---
 node_modules/
 
-# Vite 的构建产物。将来会由 embed.FS 编进二进制，因此它是构建的输入而非源码——
-# 由 CI 在构建镜像时现场生成，不进版本库。
+# Vite 的构建产物。由 CI 现场构建后 scp 上 VPS，交给 Caddy 的 file_server 提供，
+# 不进版本库。
 web/dist/
 
 # Vite 的依赖预打包缓存与 tsc 的增量信息
@@ -53,12 +56,6 @@ web/node_modules/.vite/
 # 被顺手提交进来、从此两份依赖树各说各话。
 package-lock.json
 yarn.lock
-
-# --- 测试产物 ---
-# Playwright 冒烟测试（M0）
-test-results/
-playwright-report/
-playwright/.cache/
 
 # --- 配置与密钥 ---
 # .env 是本地配置的唯一来源，逐机器不同且含口令。.env.example 是它的模板，必须进库。

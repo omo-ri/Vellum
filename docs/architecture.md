@@ -4,6 +4,8 @@
 
 它描述结构，不描述功能——要做什么看 [`PRD.md`](../PRD.md)，术语怎么叫看 [`UBIQUITOUS_LANGUAGE.md`](../UBIQUITOUS_LANGUAGE.md)。库里有哪些表以 `migrations/` 下的 SQL 为准。
 
+**仓库分两半**：后端在 `server/`（Go module 根，module 名 `vellum`），前端在 `web/`，`Makefile` 与 `compose.yaml` 留在仓库根。下文出现的 `cmd/vellum`、`internal/…`、`migrations/`、`api/…` 一律相对 `server/`；以 `web/` 开头的相对仓库根。
+
 一条规则要写进这份文档，必须同时满足两个条件：**我理解并认同它为什么这么做**，且 **AI 照着能稳定执行**。写不出「不遵守会出什么具体的错」的条目不写；只靠「将来可能需要」支撑的条目也不写——那个理由没有下界，它能同时论证第四层、事件总线和一切抽象。
 
 **只在某一行代码旁边才有意义的知识**（某个工具的坑、某个 API 的陷阱）写在那行代码的注释里，不写在这里。
@@ -164,7 +166,7 @@ internal/api  internal/platform  migrations       业务模块
 
 ### 总体形态
 
-**Go 单体二进制 + 一个 Postgres 实例。** 四个模块是四个包，不是四个服务——全部负载来自一个人的手机，任何形式的水平拆分只会增加故障面。**前端产物 `embed` 进同一个二进制**，部署产物只有一个可执行文件，没有「静态文件放哪、nginx 怎么配、版本对不对得上」这类问题。
+**Go 单体二进制 + 一个 Postgres 实例。** 四个模块是四个包，不是四个服务——全部负载来自一个人的手机，任何形式的水平拆分只会增加故障面。**前端产物不 `embed` 进二进制**（未落地）：`web/dist` 由 VPS 上的 Caddy 直接 `file_server`，前后端因此是两个产物、两条发布路径。代价是多一份「静态文件放哪、版本对不对得上」的心智负担，换来的是改一行文案不必重编二进制。
 
 **HTTP 框架用 Echo v4。** 理由不是 Echo 比 chi/gin 好，而是 `oapi-codegen` 的 `echo-server` 目标现成可用，且它的 `HTTPErrorHandler` 给了一个天然的「唯一决定错误响应形状」的地方（理念二）。
 
