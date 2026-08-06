@@ -15,7 +15,7 @@ SHELL := /bin/bash
 COREPACK_ENABLE_DOWNLOAD_PROMPT = 0
 PNPM := cd web && corepack pnpm
 
-.PHONY: help setup dev api web db-up db-down db-reset migrate migrate-down migrate-new gen gen-check lint fmt build
+.PHONY: help setup dev api web db-up db-down db-reset migrate migrate-down migrate-new gen gen-check typecheck fmt build
 
 help: ## 列出全部目标
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -67,7 +67,7 @@ migrate-new: ## 新建一个空迁移：make migrate-new name=add_expense
 # 编译器，不再暴露 ts.factory 那套 AST 构造 API，而 openapi-typescript 正是靠它生成
 # schema.d.ts 的——升上去之后下面这条 openapi-typescript 会以
 # `TypeError: Cannot read properties of undefined (reading 'createKeywordTypeNode')` 失败。
-# 而 tsc --noEmit 仍然正常，所以 make lint 不会替你发现这件事。
+# 而 tsc --noEmit 仍然正常，所以 make typecheck 不会替你发现这件事。
 # pnpm peers check 会报出这个冲突。哪天 openapi-typescript 声明支持 ^7，这段就可以删。
 gen: ## 从 api/openapi.yaml 生成 Go 与 TS 两端产物
 	go tool oapi-codegen -config api/cfg-types.yaml api/openapi.yaml
@@ -79,8 +79,7 @@ gen-check: gen ## 生成后比对：产物与契约不一致即失败（CI 用�
 
 # --- 质量闸门 ---
 
-lint: ## golangci-lint + tsc
-	go tool golangci-lint run
+typecheck: ## tsc --noEmit
 	$(PNPM) exec tsc --noEmit
 
 fmt: ## gofmt

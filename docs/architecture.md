@@ -52,7 +52,7 @@ internal/api  internal/platform  migrations       业务模块
 
 **模块内部严格单向：** `handler → service → repo`。反向引用与跨层跳跃（handler 直接调 repo）都不允许。
 
-这两条目前靠纪律，不靠工具。将来可以用 `golangci-lint` 的 `depguard` 把它们变成编译失败，现在没做。
+这两条靠纪律，不靠工具。本项目不引入 linter（理由见「明确不引入」），所以违反了不会有任何东西提醒你。
 
 ### 每个业务模块三层
 
@@ -126,7 +126,7 @@ internal/api  internal/platform  migrations       业务模块
 
 ## 纪律
 
-编译器和 linter 不会提醒你的约定。违反了会出事。
+编译器不会提醒你的约定。违反了会出事。
 
 ### GET 不得有副作用
 
@@ -170,7 +170,7 @@ internal/api  internal/platform  migrations       业务模块
 
 **HTTP 框架用 Echo v4。** 理由不是 Echo 比 chi/gin 好，而是 `oapi-codegen` 的 `echo-server` 目标现成可用，且它的 `HTTPErrorHandler` 给了一个天然的「唯一决定错误响应形状」的地方（理念二）。
 
-**数据库不分 schema，全部表放在默认 schema。** 曾经想用 schema 让模块边界成为物理事实，但 Postgres 本来就允许跨 schema 外键——它并没有真的挡住什么，只是增加了迁移与连接配置的麻烦。边界靠纪律（将来靠 lint），不靠 schema。
+**数据库不分 schema，全部表放在默认 schema。** 曾经想用 schema 让模块边界成为物理事实，但 Postgres 本来就允许跨 schema 外键——它并没有真的挡住什么，只是增加了迁移与连接配置的麻烦。边界靠纪律，不靠 schema。
 
 **迁移用 goose，SQL 通过 `embed` 编进二进制**，且是独立子命令而不是服务启动时的一步（原因见 [`operations.md`](operations.md)）。
 
@@ -181,6 +181,7 @@ internal/api  internal/platform  migrations       业务模块
 | 不引入 | 因为 |
 | --- | --- |
 | **DI 框架** | 依赖在 `cmd/vellum` 里手写 `new`，装配代码不到一屏（理念五） |
+| **linter**（golangci-lint / ESLint 之类） | 单人开发，没有需要靠工具统一的团队风格。质量闸门只剩三样自带的：`gofmt`、`go vet`、`tsc --noEmit`。上面那些「靠纪律」的约定就真的只靠纪律 |
 | **mock 生成框架** | fake 一律手写在测试文件里。手写的 fake 会因为「写起来麻烦」而逼你保持接口窄，生成的不会 |
 | **第四层**（usecase / 独立 domain / CQRS） | 三层已经能回答「这段逻辑写在哪」，第四层让这个问题重新需要讨论（理念五） |
 | **ORM / query builder** | SQL 手写在各模块 repo |

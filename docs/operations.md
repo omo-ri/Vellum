@@ -45,7 +45,7 @@ pull → migrate → up -d
 GitHub Actions，`main` 分支触发：
 
 ```
-go vet + golangci-lint + go test ./...        （含 repo 层与端到端测试）
+go vet + go test ./...                        （含 repo 层与端到端测试）
 tsc + 前端构建
 make gen-check                                 （契约生成漂移检查）
         ↓

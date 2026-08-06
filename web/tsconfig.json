@@ -21,7 +21,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
 
-    // Vite 负责产出 JS；tsc 在这里只做类型检查这一件事（make lint 的 TS 那一半）。
+    // Vite 负责产出 JS；tsc 在这里只做类型检查这一件事（即 make typecheck）。
     "noEmit": true
   },
   "include": ["src", "vite.config.ts"]
