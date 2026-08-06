@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { api } from "./api/client";
+import { copy } from "./copy";
 
 // 骨架阶段的整个前端就是这一件事：向后端要一次健康状态，把结果显示出来。
 //
@@ -37,13 +38,7 @@ export function App() {
   return (
     <main>
       <h1>Vellum</h1>
-      <p>{message[connection]}</p>
+      <p>{copy.connection[connection]}</p>
     </main>
   );
 }
-
-const message: Record<Connection, string> = {
-  checking: "正在确认据点状态……",
-  ok: "据点连接正常",
-  down: "连接不上据点",
-};
