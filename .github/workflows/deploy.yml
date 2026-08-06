@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [dev]
+    branches: [main]
   workflow_dispatch:   # 可选，允许手动触发
 
 env:
@@ -17,3 +17,50 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 构建前端 → web/dist
+        working-directory: web
+        run: |
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm build
+
+      - name: 构建后端 → dist/vellum
+        run: make build-release
+
+      - name: 部署到 VPS
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+          TARGET="$VPS_USER@$VPS_HOST"
+
+          rsync -az --delete web/dist/ "$TARGET:/srv/vellum/web/"
+          rsync -az dist/vellum "$TARGET:/opt/vellum/vellum.new"
+          rsync -az deploy/Caddyfile "$TARGET:/etc/caddy/Caddyfile"
+
+          ssh "$TARGET" bash -euo pipefail <<'REMOTE'
+          mv /opt/vellum/vellum.new /opt/vellum/vellum
+          chmod 755 /opt/vellum/vellum
+
+          set -a
+          . /etc/vellum/env
+          set +a
+          /opt/vellum/vellum migrate up
+
+          systemctl restart vellum
+          systemctl reload caddy
+          REMOTE
