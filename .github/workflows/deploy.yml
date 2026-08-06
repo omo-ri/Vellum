@@ -2,7 +2,10 @@ name: build & deploy
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:   # 可选，允许手动触发
 
 env:
   VPS_HOST: 176.124.212.32
@@ -62,4 +65,3 @@ jobs:
           systemctl restart vellum
           systemctl reload caddy
           REMOTE
-          
