@@ -74,8 +74,14 @@ gen: ## 从 api/openapi.yaml 生成 Go 与 TS 两端产物
 	go tool oapi-codegen -config api/cfg-server.yaml api/openapi.yaml
 	$(PNPM) exec openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts
 
+# 这里的 pathspec 只点名生成产物，不写目录——internal/api 与 web/src/api 里都混着
+# 手写文件（handler.go、client.ts），按目录比对会让无关的手写改动也把 gen-check 判失败。
+# 另注意 git diff 只看已追踪文件：新增的产物在第一次 git add 之前是 untracked，这里看不见。
 gen-check: gen ## 生成后比对：产物与契约不一致即失败（CI 用）
-	git diff --exit-code
+	git diff --exit-code -- \
+		internal/api/types.gen.go \
+		internal/api/server.gen.go \
+		web/src/api/schema.d.ts
 
 # --- 质量闸门 ---
 
