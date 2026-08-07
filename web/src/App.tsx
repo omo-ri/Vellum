@@ -1,35 +1,14 @@
-import { useEffect, useState } from "react";
-
-import { api } from "./api/client";
-import { copy } from "./copy";
-
-type Connection = "checking" | "ok" | "down";
+import bgUrl from "./assets/home_bg.webp";
 
 export function App() {
-  const [connection, setConnection] = useState<Connection>("checking");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    api
-      .GET("/healthz")
-      .then(({ data }) => {
-        if (cancelled) return;
-        setConnection(data?.status === "ok" && data.database === "ok" ? "ok" : "down");
-      })
-      .catch(() => {
-        if (!cancelled) setConnection("down");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   return (
-    <main>
-      <h1>Vellum</h1>
-      <p>{copy.connection[connection]}</p>
-    </main>
+    <img
+      src={bgUrl}
+      alt=""
+      aria-hidden="true"
+      fetchPriority="high"
+      /* 竖屏时把焦点下移到 70%，否则 cover 会从横图中间切一条窄缝，人物全被裁掉 */
+      className="fixed inset-0 -z-10 h-full w-full object-cover object-center portrait:object-[50%_70%]"
+    />
   );
 }
