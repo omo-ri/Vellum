@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* 背景图加载完成前的兜底色，取自图片本身的平均色，避免先白闪一下 */
+body {
+  background-color: #5a5029;
+}
