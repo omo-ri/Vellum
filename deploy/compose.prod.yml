@@ -1,0 +1,29 @@
+# VPS 上的生产库。安装位置：/opt/postgres/compose.yml
+# 与仓库根目录的 compose.yaml（本地开发用）是两份东西，别混。
+#
+# 密码不进仓库，从同目录的 .env 读：
+#   /opt/postgres/.env  →  DB_PASSWORD=...（chmod 600）
+# 操作：cd /opt/postgres && docker compose up -d --wait db
+
+name: vellum
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: always
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: vellum
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required (见本文件顶部说明)}
+      POSTGRES_DB: vellum
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vellum -d vellum"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

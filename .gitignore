@@ -7,7 +7,7 @@
 #   server/internal/api/*.gen.go、web/src/api/schema.d.ts —— 契约的生成产物，CI 靠
 #     `make gen-check` 重新生成并比对，不提交就无从比对（见 docs/architecture.md）。
 #   web/pnpm-lock.yaml —— 锁定前端依赖。
-#   .agents/skills/ 与 skills-lock.json —— 随仓库钉死的 agent 技能。
+#   skills-lock.json —— agent 技能的锁文件，靠它把 .agents/ 装回来。
 #   .scratch/ —— 本仓库的 issue tracker（见 docs/agents/issue-tracker.md）。
 
 # --- Go 构建与测试产物 ---
@@ -63,6 +63,15 @@ yarn.lock
 .env.*
 !.env.example
 
+deploy_key
+deploy_key.pub
+*.pem
+*.key
+id_rsa*
+id_ecdsa*
+id_ed25519*
+known_hosts
+
 # --- 运行时数据 ---
 # 照片原图与派生图的落盘位置。生产上是 VM 的数据卷，本地是这个目录。
 /data/
@@ -78,5 +87,7 @@ Thumbs.db
 # --- Agent 本地配置 ---
 # .claude/settings.local.json 是本机的权限白名单，逐机器不同。
 # .claude/skills/ 是指向 .agents/skills/ 的符号链接，由 skills 安装流程生成。
+# .agents/ 同样由安装流程生成，按 skills-lock.json 装出来，不进版本库。
 .claude/settings.local.json
 .claude/skills/
+.agents/
