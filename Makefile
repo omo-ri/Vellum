@@ -11,7 +11,7 @@ GO := go -C server
 
 GIT_SHA ?= $(shell git rev-parse --short=7 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: help setup dev api web db-up db-down db-reset migrate migrate-down migrate-new gen gen-check typecheck fmt test build build-release
+.PHONY: help setup dev api web db-up db-down db-reset migrate migrate-down migrate-new gen gen-server gen-web gen-check gen-check-server gen-check-web typecheck fmt test build build-web build-release
 
 help: ## 列出全部目标
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -55,16 +55,24 @@ migrate-new: ## 新建一个空迁移：make migrate-new name=add_expense
 	@test -n "$(name)" || (echo "用法：make migrate-new name=add_expense" && exit 1)
 	$(GO) tool goose -dir migrations create $(name) sql
 
-gen: ## 从 server/api/openapi.yaml 生成 Go 与 TS 两端产物
+gen: gen-server gen-web ## 从 server/api/openapi.yaml 生成 Go 与 TS 两端产物
+
+gen-server: ## 只生成契约的 Go 侧产物
 	$(GO) tool oapi-codegen -config api/cfg-types.yaml api/openapi.yaml
 	$(GO) tool oapi-codegen -config api/cfg-server.yaml api/openapi.yaml
+
+gen-web: ## 只生成契约的 TS 侧产物
 	$(PNPM) exec openapi-typescript ../server/api/openapi.yaml -o src/api/schema.d.ts
 
-gen-check: gen ## 生成后比对：产物与契约不一致即失败
+gen-check: gen-check-server gen-check-web ## 生成后比对：产物与契约不一致即失败
+
+gen-check-server: gen-server ## Go 侧产物与契约不一致即失败
 	git diff --exit-code -- \
 		server/internal/api/types.gen.go \
-		server/internal/api/server.gen.go \
-		web/src/api/schema.d.ts
+		server/internal/api/server.gen.go
+
+gen-check-web: gen-web ## TS 侧产物与契约不一致即失败
+	git diff --exit-code -- web/src/api/schema.d.ts
 
 typecheck: ## tsc --noEmit
 	$(PNPM) exec tsc --noEmit
@@ -77,6 +85,9 @@ test: ## go test
 
 build: ## 构建单一二进制到 ./vellum
 	$(GO) build -o ../vellum ./cmd/vellum
+
+build-web: ## 构建前端 → web/dist
+	$(PNPM) build
 
 build-release: ## 发布构建：静态链接的 linux/amd64 二进制 → dist/vellum
 	mkdir -p dist

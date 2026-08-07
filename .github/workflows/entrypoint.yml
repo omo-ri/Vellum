@@ -1,0 +1,52 @@
+name: CI
+
+# 第 1 层：何时触发、构建哪些模块。
+# 单个模块怎么走流程见 _build-module.yml。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      server: ${{ steps.filter.outputs.server }}
+    steps:
+      - uses: actions/checkout@v4   # push 事件下 paths-filter 需要工作树来比对
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'web/**'
+              - 'deploy/Caddyfile'
+              - '.github/actions/**'
+              - '.github/workflows/**'
+              - 'Makefile'
+            server:
+              - 'server/**'
+              - '.github/actions/**'
+              - '.github/workflows/**'
+              - 'Makefile'
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_build-module.yml
+    with:
+      module: web
+      deploy: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    secrets: inherit
+
+  server:
+    needs: changes
+    if: needs.changes.outputs.server == 'true' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_build-module.yml
+    with:
+      module: server
+      deploy: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    secrets: inherit

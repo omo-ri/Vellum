@@ -1,0 +1,22 @@
+name: build
+description: 产出指定模块的构建物
+
+inputs:
+  module:
+    description: web 或 server
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: 构建前端 → web/dist
+      if: inputs.module == 'web'
+      shell: bash
+      env:
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+      run: make build-web
+
+    - name: 构建后端 → dist/vellum
+      if: inputs.module == 'server'
+      shell: bash
+      run: make build-release

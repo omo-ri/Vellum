@@ -1,0 +1,36 @@
+name: test
+description: 跑指定模块的检查——类型/单测，以及它那一半的 OpenAPI 契约校验
+
+inputs:
+  module:
+    description: web 或 server
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # ---- web ----
+    - name: 类型检查
+      if: inputs.module == 'web'
+      shell: bash
+      env:
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+      run: make typecheck
+
+    - name: 契约校验（TS 侧）
+      if: inputs.module == 'web'
+      shell: bash
+      env:
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+      run: make gen-check-web
+
+    # ---- server ----
+    - name: 单元测试
+      if: inputs.module == 'server'
+      shell: bash
+      run: make test
+
+    - name: 契约校验（Go 侧）
+      if: inputs.module == 'server'
+      shell: bash
+      run: make gen-check-server

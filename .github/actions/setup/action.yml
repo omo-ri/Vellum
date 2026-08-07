@@ -1,0 +1,36 @@
+name: setup
+description: 装好指定模块的工具链与依赖
+
+inputs:
+  module:
+    description: web 或 server
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # ---- web ----
+    - uses: actions/setup-node@v4
+      if: inputs.module == 'web'
+      with:
+        node-version: 22
+
+    - name: 装前端依赖
+      if: inputs.module == 'web'
+      shell: bash
+      working-directory: web
+      env:
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+      run: corepack pnpm install --frozen-lockfile
+
+    # ---- server ----
+    - uses: actions/setup-go@v5
+      if: inputs.module == 'server'
+      with:
+        go-version-file: server/go.mod
+        cache-dependency-path: server/go.sum
+
+    - name: 拉 Go 依赖
+      if: inputs.module == 'server'
+      shell: bash
+      run: go -C server mod download

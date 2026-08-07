@@ -1,0 +1,68 @@
+name: deploy
+description: 把指定模块的构建物送上 VPS，并重启它对应的服务
+
+inputs:
+  module:
+    description: web 或 server
+    required: true
+  ssh-key:
+    description: 有 VPS 登录权限的私钥
+    required: true
+  host:
+    description: VPS 地址
+    required: false
+    default: 176.124.212.32
+  user:
+    description: 登录用户
+    required: false
+    default: root
+
+runs:
+  using: composite
+  steps:
+    # 密钥和 known_hosts 都放在 RUNNER_TEMP，不碰 ~/.ssh——
+    # 这样本机跑这个 action 时不会覆盖开发者自己的身份文件。
+    - name: 准备 SSH
+      shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh-key }}
+        HOST: ${{ inputs.host }}
+        USER_NAME: ${{ inputs.user }}
+      run: |
+        key="$RUNNER_TEMP/deploy_key"
+        hosts="$RUNNER_TEMP/known_hosts"
+
+        printf '%s\n' "$SSH_KEY" >"$key"
+        chmod 600 "$key"
+        ssh-keyscan -H "$HOST" >"$hosts" 2>/dev/null
+
+        {
+          echo "SSH=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$hosts"
+          echo "TARGET=$USER_NAME@$HOST"
+        } >>"$GITHUB_ENV"
+
+    - name: 部署 web
+      if: inputs.module == 'web'
+      shell: bash
+      run: |
+        rsync -az -e "$SSH" --delete web/dist/ "$TARGET:/srv/vellum/web/"
+        rsync -az -e "$SSH" deploy/Caddyfile "$TARGET:/etc/caddy/Caddyfile"
+        $SSH "$TARGET" systemctl reload caddy
+
+    - name: 部署 server
+      if: inputs.module == 'server'
+      shell: bash
+      run: |
+        rsync -az -e "$SSH" dist/vellum "$TARGET:/opt/vellum/vellum.new"
+
+        $SSH "$TARGET" bash -euo pipefail <<'REMOTE'
+        mv /opt/vellum/vellum.new /opt/vellum/vellum
+        chmod 755 /opt/vellum/vellum
+
+        set -a
+        . /etc/vellum/env
+        set +a
+        /opt/vellum/vellum migrate up
+
+        systemctl restart vellum
+        REMOTE

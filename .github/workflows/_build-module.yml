@@ -1,0 +1,47 @@
+name: build module
+
+# 第 2 层：一个模块怎么走完 测试 → 构建 → 部署。
+# 每一步具体做什么在 .github/actions/* 里，这里只负责顺序。
+on:
+  workflow_call:
+    inputs:
+      module:
+        description: web 或 server
+        type: string
+        required: true
+      deploy:
+        description: 构建通过后是否部署
+        type: boolean
+        default: false
+    secrets:
+      SSH_PRIVATE_KEY:
+        description: 有 VPS 登录权限的私钥，只在 deploy 为 true 时用到
+        required: false
+
+jobs:
+  module:
+    runs-on: ubuntu-latest
+    # 同一模块的两次部署排队，不并发
+    concurrency:
+      group: ${{ inputs.module }}-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+        with:
+          module: ${{ inputs.module }}
+
+      - uses: ./.github/actions/test
+        with:
+          module: ${{ inputs.module }}
+
+      - uses: ./.github/actions/build
+        with:
+          module: ${{ inputs.module }}
+
+      - uses: ./.github/actions/deploy
+        if: inputs.deploy
+        with:
+          module: ${{ inputs.module }}
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
